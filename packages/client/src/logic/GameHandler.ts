@@ -12,6 +12,7 @@ import {
 import config from "../config";
 import {
   IAuthMessage,
+  IPingMessage,
   OutgoingMessage,
   IProposeEventMessage,
   IProposeEndGameMessage
@@ -31,6 +32,7 @@ class GameHandler {
   private events: GameEvent[] = [];
   private webSocket: WebSocket;
   private gameState: IGameState = defaultGameState;
+  private heartBeatTimeout: number = -1;
 
   constructor(
     gameId: string,
@@ -52,7 +54,7 @@ class GameHandler {
     // Setup on message
     this.webSocket.onmessage = this.onWebSocketMessage.bind(this);
 
-    // Send auth message on websocket open
+    // Setup open handler
     this.webSocket.addEventListener("open", (event) => {
       const message: IAuthMessage = {
         type: "auth",
@@ -60,6 +62,7 @@ class GameHandler {
         userToken: this.userToken
       };
       this.webSocket.send(JSON.stringify(message));
+      this.heartBeatTimeout = window.setTimeout(this.pingBackServer.bind(this), 2500);
     });
 
     // Handle websocket close
@@ -195,6 +198,20 @@ class GameHandler {
     // Notify the user of this class that a change has been made internally.
     const gameEnded = incomingMessage.type === "gameEnd" || !inPlayers;
     this.onGameStateChange(gameEnded);
+  }
+
+  private pingBackServer() {
+    console.log("pinging websocket");
+    if (this.heartBeatTimeout) {
+      clearTimeout(this.heartBeatTimeout);
+    }
+    const message: IPingMessage = {
+      type: "ping",
+      gameId: this.gameId,
+      userToken: this.userToken
+    };
+    this.webSocket.send(JSON.stringify(message));
+    this.heartBeatTimeout = window.setTimeout(this.pingBackServer.bind(this), 2500);
   }
 
   // Messages to the server
